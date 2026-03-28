@@ -582,3 +582,13 @@
     font-size: 0.82rem;
     color: var(--text-secondary);
 }
+
+/* ── Backtest CTA ── */
+.backtest-cta {
+    text-align: center;
+}
+
+.backtest-cta .btn {
+    text-decoration: none;
+    display: inline-block;
+}

@@ -3,19 +3,20 @@
 @using StockPredictor.Models
 @inject StockPredictionService PredictionService
 @inject StockDataFetcher DataFetcher
+@inject ThemeService Theme
 @inject IJSRuntime JS
 
-<div class="page-container @(darkMode ? "dark" : "")">
+<div class="page-container @(Theme.IsDarkMode ? "dark" : "")">
     <header class="app-header">
         <div class="title-row">
             <h1>Stock Predictor</h1>
             <button class="info-btn" @onclick="() => showTutorial = true" title="How to use this app">i</button>
             <label class="theme-toggle" title="Toggle dark mode">
-                <input type="checkbox" checked="@darkMode" @onchange="ToggleDarkMode" />
+                <input type="checkbox" checked="@Theme.IsDarkMode" @onchange="ToggleDarkMode" />
                 <span class="toggle-track">
                     <span class="toggle-thumb"></span>
                 </span>
-                <span class="toggle-icon">@(darkMode ? "🌙" : "☀️")</span>
+                <span class="toggle-icon">@(Theme.IsDarkMode ? "🌙" : "☀️")</span>
             </label>
         </div>
         <p class="subtitle">ML-powered next-day direction forecast</p>
@@ -213,6 +214,12 @@
     {
         <div class="error-banner">@errorMessage</div>
     }
+
+    <section class="card backtest-cta">
+        <h2 class="card-title">📉 Backtest</h2>
+        <p class="card-description">See how the model would have performed trading on historical data.</p>
+        <a href="/backtest" class="btn btn-primary">Open Backtester</a>
+    </section>
 </div>
 
 @code {
@@ -225,7 +232,6 @@
     private bool isBusy;
     private bool showStatus;
     private bool showTutorial;
-    private bool darkMode;
     private int tutorialPage;
     private StockPrediction? predictionResult;
     private StockData? latestInput;
@@ -274,8 +280,14 @@
 
     private async Task ToggleDarkMode(ChangeEventArgs e)
     {
-        darkMode = (bool)(e.Value ?? false);
-        await JS.InvokeVoidAsync("setDarkMode", darkMode);
+        Theme.IsDarkMode = (bool)(e.Value ?? false);
+        await JS.InvokeVoidAsync("setDarkMode", Theme.IsDarkMode);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("setDarkMode", Theme.IsDarkMode);
     }
 
     private async Task FetchAndPredict()

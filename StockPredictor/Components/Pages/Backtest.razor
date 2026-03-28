@@ -1,0 +1,356 @@
+@page "/backtest"
+@using StockPredictor.Services
+@using StockPredictor.Models
+@inject StockDataFetcher DataFetcher
+@inject BacktestService Backtester
+@inject ThemeService Theme
+@inject IJSRuntime JS
+
+@* ── Info Popup ── *@
+@if (activeTip is not null && backtestInfos.TryGetValue(activeTip, out var info))
+{
+    <div class="tip-overlay" @onclick="() => activeTip = null">
+        <div class="tip-modal" @onclick:stopPropagation="true">
+            <button class="tip-close" @onclick="() => activeTip = null">✕</button>
+            <div class="tip-icon">@info.Icon</div>
+            <h2 class="tip-title">@info.Title</h2>
+            <p class="tip-body">@info.Body</p>
+            <button class="btn btn-primary btn-sm tip-dismiss" @onclick="() => activeTip = null">Got it</button>
+        </div>
+    </div>
+}
+
+<div class="page-container @(Theme.IsDarkMode ? "dark" : "")">
+    <header class="app-header">
+        <div class="title-row">
+            <h1>Backtester</h1>
+            <a href="/" class="back-link">← Predictor</a>
+            <label class="theme-toggle" title="Toggle dark mode">
+                <input type="checkbox" checked="@Theme.IsDarkMode" @onchange="ToggleDarkMode" />
+                <span class="toggle-track">
+                    <span class="toggle-thumb"></span>
+                </span>
+                <span class="toggle-icon">@(Theme.IsDarkMode ? "🌙" : "☀️")</span>
+            </label>
+        </div>
+        <p class="subtitle">See how the model would have performed on historical data</p>
+    </header>
+
+    <section class="card">
+        <div class="section-header">
+            <h2 class="card-title">Setup</h2>
+            <span class="info-btn" @onclick='() => activeTip = "setup"'>i</span>
+        </div>
+        <p class="card-description">Choose a ticker and starting capital, then run the backtest.</p>
+
+        <div class="setup-row">
+            <div class="form-group">
+                <label>Ticker</label>
+                <input type="text" @bind="ticker" placeholder="AAPL" class="ticker-field" />
+            </div>
+            <div class="form-group">
+                <label>Starting Capital ($)</label>
+                <input type="number" @bind="startingCapital" step="1000" />
+            </div>
+            <div class="form-group">
+                <label>Train %</label>
+                <input type="number" @bind="trainPct" min="50" max="90" step="5" />
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-primary" @onclick="RunBacktest" disabled="@isBusy">
+                @(isBusy ? "Running..." : "Run Backtest")
+            </button>
+            <button class="btn btn-outline" @onclick="RunBacktestSample" disabled="@isBusy">
+                Use Sample Data
+            </button>
+        </div>
+    </section>
+
+    @if (isBusy)
+    {
+        <section class="card">
+            <p class="status-text">⏳ @statusMessage</p>
+        </section>
+    }
+
+    @if (result is not null)
+    {
+        <section class="card">
+            <div class="section-header">
+                <h2 class="card-title">Results — @activeTicker</h2>
+                <span class="info-btn" @onclick='() => activeTip = "results"'>i</span>
+            </div>
+            <p class="card-description">
+                Trained on @result.TrainDays days, tested on @result.TestDays days
+            </p>
+
+            <div class="metrics-grid">
+                <div class="metric @(result.TotalReturnPct >= 0 ? "metric-up" : "metric-down")">
+                    <span class="metric-value">@result.TotalReturnPct.ToString("+0.0;-0.0")%</span>
+                    <span class="metric-label">Strategy Return</span>
+                </div>
+                <div class="metric @(result.BuyHoldReturnPct >= 0 ? "metric-up" : "metric-down")">
+                    <span class="metric-value">@result.BuyHoldReturnPct.ToString("+0.0;-0.0")%</span>
+                    <span class="metric-label">Buy & Hold</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-value">@result.WinRate.ToString("F1")%</span>
+                    <span class="metric-label">Win Rate</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-value">@result.SharpeRatio.ToString("F2")</span>
+                    <span class="metric-label">Sharpe Ratio</span>
+                </div>
+            </div>
+
+            <div class="metrics-grid mt">
+                <div class="metric">
+                    <span class="metric-value">$@result.FinalCapital.ToString("N0")</span>
+                    <span class="metric-label">Final Capital</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-value">@result.TotalTrades</span>
+                    <span class="metric-label">Total Trades</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-value">@result.MaxDrawdownPct.ToString("F1")%</span>
+                    <span class="metric-label">Max Drawdown</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-value">@result.ProfitFactor.ToString("F2")</span>
+                    <span class="metric-label">Profit Factor</span>
+                </div>
+            </div>
+
+            <div class="metrics-grid mt">
+                <div class="metric metric-up">
+                    <span class="metric-value">@result.Wins W</span>
+                    <span class="metric-label">Avg Win @result.AvgWinPct.ToString("F2")%</span>
+                </div>
+                <div class="metric metric-down">
+                    <span class="metric-value">@result.Losses L</span>
+                    <span class="metric-label">Avg Loss @result.AvgLossPct.ToString("F2")%</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="section-header">
+                <h2 class="card-title">Equity Curve</h2>
+                <span class="info-btn" @onclick='() => activeTip = "equity"'>i</span>
+            </div>
+            <div class="chart-wrapper chart-large">
+                <canvas id="equityChart"></canvas>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="section-header">
+                <h2 class="card-title">Per-Trade Returns</h2>
+                <span class="info-btn" @onclick='() => activeTip = "returns"'>i</span>
+            </div>
+            <div class="chart-wrapper chart-medium">
+                <canvas id="returnsChart"></canvas>
+            </div>
+        </section>
+
+        <section class="card">
+            <details>
+                <summary class="card-title clickable">Trade Log (@result.TotalTrades trades)</summary>
+                <div class="trade-log">
+                    <div class="trade-header">
+                        <span>#</span>
+                        <span>Dir</span>
+                        <span>Entry</span>
+                        <span>Exit</span>
+                        <span>Return</span>
+                        <span>Conf</span>
+                        <span>Equity</span>
+                    </div>
+                    @foreach (var t in result.Trades)
+                    {
+                        <div class="trade-row @(t.Correct ? "trade-win" : "trade-loss")">
+                            <span>@t.Day</span>
+                            <span class="@(t.Direction == "LONG" ? "dir-long" : "dir-short")">@t.Direction</span>
+                            <span>$@t.EntryPrice.ToString("F2")</span>
+                            <span>$@t.ExitPrice.ToString("F2")</span>
+                            <span>@t.ReturnPct.ToString("+0.00;-0.00")%</span>
+                            <span>@t.Probability.ToString("P0")</span>
+                            <span>$@t.Equity.ToString("N0")</span>
+                        </div>
+                    }
+                </div>
+            </details>
+        </section>
+
+        <section class="card disclaimer-card">
+            <p class="disclaimer">
+                ⚠️ <strong>This is a simulation.</strong> Past performance does not predict future results.
+                Backtests don't account for slippage, commissions, spreads, or market impact.
+                Do not use this as the basis for real trading decisions.
+            </p>
+        </section>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-banner">⚠️ @errorMessage</div>
+    }
+</div>
+
+@code {
+    private string ticker = "AAPL";
+    private string activeTicker = "";
+    private double startingCapital = 10_000;
+    private int trainPct = 70;
+    private bool isBusy;
+    private string statusMessage = "";
+    private string? errorMessage;
+    private string? activeTip;
+    private BacktestResult? result;
+    private BacktestResult? _renderedResult;
+
+    private record InfoCard(string Icon, string Title, string Body);
+
+    private static readonly Dictionary<string, InfoCard> backtestInfos = new()
+    {
+        ["setup"] = new("⚙️", "Backtest Setup",
+            "The backtest trains the ML model on the first portion of historical data (Train %), " +
+            "then simulates trading on the remaining days. Each day it predicts UP or DOWN — " +
+            "if UP it goes long (buy), if DOWN it goes short (sell). " +
+            "Train % controls the split: 70% means 70% for training, 30% for testing."),
+        ["results"] = new("📋", "Understanding the Metrics",
+            "Strategy Return: total % gain/loss from the model's trades.\n" +
+            "Buy & Hold: what you'd earn just holding the stock — the benchmark to beat.\n" +
+            "Win Rate: % of trades that made money. Above 50% is needed for a simple strategy.\n" +
+            "Sharpe Ratio: risk-adjusted return. Above 1.0 is decent, above 2.0 is strong.\n" +
+            "Max Drawdown: the worst peak-to-trough loss — shows your worst-case scenario.\n" +
+            "Profit Factor: gross wins ÷ gross losses. Above 1.0 means profitable overall."),
+        ["equity"] = new("📈", "Equity Curve",
+            "This chart shows your portfolio value over time, starting from your initial capital. " +
+            "An upward-sloping curve means the strategy is making money. " +
+            "The dashed line is your starting capital — staying above it means you're in profit. " +
+            "Look for smooth upward curves; jagged drops indicate high risk."),
+        ["returns"] = new("📊", "Per-Trade Returns",
+            "Each bar shows the % return from a single trade. " +
+            "Green bars are winning trades, red bars are losing trades. " +
+            "Ideally you want: more green than red, and the green bars taller than the red ones. " +
+            "A few large red bars can wipe out many small green ones — that's why risk management matters.")
+    };
+
+    private async Task RunBacktest()
+    {
+        if (string.IsNullOrWhiteSpace(ticker))
+        {
+            errorMessage = "Enter a ticker symbol.";
+            return;
+        }
+        
+        if (startingCapital > 100000000)
+        {
+            errorMessage = "Starting capital must be $100M or less.";
+            return;
+        }
+
+        try
+        {
+            isBusy = true;
+            errorMessage = null;
+            result = null;
+            activeTicker = ticker.Trim().ToUpperInvariant();
+            statusMessage = $"Fetching data for {activeTicker}...";
+            StateHasChanged();
+
+            var rawRows = await DataFetcher.FetchDailyAsync(activeTicker);
+
+            statusMessage = "Running backtest...";
+            StateHasChanged();
+
+            result = await Backtester.RunAsync(rawRows, startingCapital, trainPct / 100.0);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RunBacktestSample()
+    {
+        try
+        {
+            isBusy = true;
+            errorMessage = null;
+            result = null;
+            activeTicker = "SAMPLE";
+            statusMessage = "Loading sample data...";
+            StateHasChanged();
+
+            using var stream = await FileSystem.OpenAppPackageFileAsync("stockdata.csv");
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+
+            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var rawRows = new List<RawStockRow>();
+            for (int i = 1; i < lines.Length; i++)
+            {
+                var parts = lines[i].Split(',');
+                if (parts.Length >= 2 &&
+                    float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var c) &&
+                    float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v))
+                {
+                    rawRows.Add(new RawStockRow { Close = c, Volume = v });
+                }
+            }
+
+            statusMessage = "Running backtest...";
+            StateHasChanged();
+
+            result = await Backtester.RunAsync(rawRows, startingCapital, trainPct / 100.0);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Sample backtest failed: {ex.Message}";
+        }
+        finally
+        {
+            isBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleDarkMode(ChangeEventArgs e)
+    {
+        Theme.IsDarkMode = (bool)(e.Value ?? false);
+        await JS.InvokeVoidAsync("setDarkMode", Theme.IsDarkMode);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("setDarkMode", Theme.IsDarkMode);
+
+        if (result is null || ReferenceEquals(result, _renderedResult))
+            return;
+
+        _renderedResult = result;
+
+        var labels = Enumerable.Range(0, result.EquityCurve.Count).Select(i => i.ToString()).ToArray();
+        var equity = result.EquityCurve.ToArray();
+
+        await JS.InvokeVoidAsync("stockCharts.createEquityCurveChart",
+            "equityChart", labels, equity, result.StartingCapital);
+
+        var tradeLabels = result.Trades.Select((_, i) => (i + 1).ToString()).ToArray();
+        var returns = result.Trades.Select(t => t.ReturnPct).ToArray();
+
+        await JS.InvokeVoidAsync("stockCharts.createTradeReturnsChart",
+            "returnsChart", tradeLabels, returns);
+    }
+}
