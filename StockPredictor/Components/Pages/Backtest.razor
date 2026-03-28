@@ -6,21 +6,22 @@
 @inject ThemeService Theme
 @inject IJSRuntime JS
 
-@* ── Info Popup ── *@
-@if (activeTip is not null && backtestInfos.TryGetValue(activeTip, out var info))
-{
-    <div class="tip-overlay" @onclick="() => activeTip = null">
-        <div class="tip-modal" @onclick:stopPropagation="true">
-            <button class="tip-close" @onclick="() => activeTip = null">✕</button>
-            <div class="tip-icon">@info.Icon</div>
-            <h2 class="tip-title">@info.Title</h2>
-            <p class="tip-body">@info.Body</p>
-            <button class="btn btn-primary btn-sm tip-dismiss" @onclick="() => activeTip = null">Got it</button>
-        </div>
-    </div>
-}
-
 <div class="page-container @(Theme.IsDarkMode ? "dark" : "")">
+
+    @* ── Info Popup ── *@
+    @if (activeTip is not null && backtestInfos.TryGetValue(activeTip, out var info))
+    {
+        <div class="tip-overlay" @onclick="() => activeTip = null">
+            <div class="tip-modal" @onclick:stopPropagation="true">
+                <button class="tip-close" @onclick="() => activeTip = null">✕</button>
+                <div class="tip-icon">@info.Icon</div>
+                <h2 class="tip-title">@info.Title</h2>
+                <p class="tip-body">@info.Body</p>
+                <button class="btn btn-primary btn-sm tip-dismiss" @onclick="() => activeTip = null">Got it</button>
+            </div>
+        </div>
+    }
+
     <header class="app-header">
         <div class="title-row">
             <h1>Backtester</h1>

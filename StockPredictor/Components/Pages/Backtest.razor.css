@@ -32,6 +32,9 @@
     --down-border: #f5c6c6;
     --down-text: #721c24;
 
+    --overlay-bg: rgba(0, 0, 0, 0.5);
+    --modal-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+
     --toggle-track-bg: #dee2e6;
     --toggle-track-active: #4361ee;
 }
@@ -69,6 +72,9 @@
     --down-bg: #3a1a1a;
     --down-border: #5a2a2a;
     --down-text: #f08080;
+
+    --overlay-bg: rgba(0, 0, 0, 0.7);
+    --modal-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 
     --toggle-track-bg: #3a3d4a;
     --toggle-track-active: #5b7cfa;
@@ -150,7 +156,7 @@
 .tip-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay-bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -159,13 +165,14 @@
 }
 
 .tip-modal {
-    background: var(--bg-card, #fff);
+    background: var(--bg-card);
     border-radius: 16px;
     max-width: 400px;
     width: 100%;
     padding: 2rem 1.75rem 1.5rem;
     position: relative;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--modal-shadow);
+    border: var(--border-card);
     text-align: center;
     animation: tipPopIn 0.25s ease-out;
 }

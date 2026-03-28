@@ -84,6 +84,8 @@ window.stockCharts = {
                         borderColor: '#7209b7',
                         borderWidth: 2,
                         pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHitRadius: 20,
                         tension: 0.3
                     },
                     {
@@ -169,6 +171,8 @@ window.stockCharts = {
                     backgroundColor: 'rgba(231,111,81,0.1)',
                     borderWidth: 2,
                     pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointHitRadius: 20,
                     fill: true,
                     tension: 0.3
                 }]
@@ -176,9 +180,11 @@ window.stockCharts = {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: { display: false },
-                    title: { display: true, text: 'Volatility', font: { size: 14 } }
+                    title: { display: true, text: 'Volatility', font: { size: 14 } },
+                    tooltip: { enabled: true }
                 },
                 scales: {
                     x: { ticks: { maxTicksLimit: 10, font: { size: 10 } } },
