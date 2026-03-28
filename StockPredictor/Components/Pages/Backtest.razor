@@ -51,7 +51,7 @@
             </div>
             <div class="form-group">
                 <label>Starting Capital ($)</label>
-                <input type="number" @bind="startingCapital" step="1000" />
+                <input type="number" @bind="startingCapital" step="1000" min="1" />
             </div>
             <div class="form-group">
                 <label>Train %</label>
@@ -243,17 +243,8 @@
 
     private async Task RunBacktest()
     {
-        if (string.IsNullOrWhiteSpace(ticker))
-        {
-            errorMessage = "Enter a ticker symbol.";
+        if (!ValidateInputs())
             return;
-        }
-        
-        if (startingCapital > 100000000)
-        {
-            errorMessage = "Starting capital must be $100M or less.";
-            return;
-        }
 
         try
         {
@@ -284,6 +275,9 @@
 
     private async Task RunBacktestSample()
     {
+        if (!ValidateInputs())
+            return;
+
         try
         {
             isBusy = true;
@@ -326,6 +320,23 @@
         }
     }
 
+    private bool ValidateInputs()
+    {
+        if (string.IsNullOrWhiteSpace(ticker))
+        {
+            errorMessage = "Enter a ticker symbol.";
+            return false;
+        }
+
+        if (startingCapital <= 0 || startingCapital > 100_000_000)
+        {
+            errorMessage = "Starting capital must be between $1 and $100M.";
+            return false;
+        }
+
+        return true;
+    }
+
     private async Task ToggleDarkMode(ChangeEventArgs e)
     {
         Theme.IsDarkMode = (bool)(e.Value ?? false);
@@ -337,19 +348,21 @@
         if (firstRender)
             await JS.InvokeVoidAsync("setDarkMode", Theme.IsDarkMode);
 
-        if (result is null || ReferenceEquals(result, _renderedResult))
+        var localResult = result;
+
+        if (localResult is null || ReferenceEquals(localResult, _renderedResult))
             return;
 
-        _renderedResult = result;
+        _renderedResult = localResult;
 
-        var labels = Enumerable.Range(0, result.EquityCurve.Count).Select(i => i.ToString()).ToArray();
-        var equity = result.EquityCurve.ToArray();
+        var labels = Enumerable.Range(0, localResult.EquityCurve.Count).Select(i => i.ToString()).ToArray();
+        var equity = localResult.EquityCurve.ToArray();
 
         await JS.InvokeVoidAsync("stockCharts.createEquityCurveChart",
-            "equityChart", labels, equity, result.StartingCapital);
+            "equityChart", labels, equity, localResult.StartingCapital);
 
-        var tradeLabels = result.Trades.Select((_, i) => (i + 1).ToString()).ToArray();
-        var returns = result.Trades.Select(t => t.ReturnPct).ToArray();
+        var tradeLabels = localResult.Trades.Select((_, i) => (i + 1).ToString()).ToArray();
+        var returns = localResult.Trades.Select(t => t.ReturnPct).ToArray();
 
         await JS.InvokeVoidAsync("stockCharts.createTradeReturnsChart",
             "returnsChart", tradeLabels, returns);
