@@ -1,0 +1,423 @@
+﻿@page "/"
+@using StockPredictor.Services
+@using StockPredictor.Models
+@inject StockPredictionService PredictionService
+@inject StockDataFetcher DataFetcher
+@inject IJSRuntime JS
+
+<div class="page-container @(darkMode ? "dark" : "")">
+    <header class="app-header">
+        <div class="title-row">
+            <h1>Stock Predictor</h1>
+            <button class="info-btn" @onclick="() => showTutorial = true" title="How to use this app">i</button>
+            <label class="theme-toggle" title="Toggle dark mode">
+                <input type="checkbox" checked="@darkMode" @onchange="ToggleDarkMode" />
+                <span class="toggle-track">
+                    <span class="toggle-thumb"></span>
+                </span>
+                <span class="toggle-icon">@(darkMode ? "🌙" : "☀️")</span>
+            </label>
+        </div>
+        <p class="subtitle">ML-powered next-day direction forecast</p>
+    </header>
+
+    @* ── Tutorial Slideshow ── *@
+    @if (showTutorial)
+    {
+        <div class="tutorial-overlay" @onclick="CloseTutorial">
+            <div class="tutorial-modal" @onclick:stopPropagation="true">
+                <button class="tutorial-close" @onclick="CloseTutorial">✕</button>
+
+                <div class="tutorial-slide">
+                    <div class="slide-icon">@tutorialSlides[tutorialPage].Icon</div>
+                    <h2 class="slide-title">@tutorialSlides[tutorialPage].Title</h2>
+                    <p class="slide-body">@tutorialSlides[tutorialPage].Body</p>
+                </div>
+
+                <div class="tutorial-dots">
+                    @for (int i = 0; i < tutorialSlides.Length; i++)
+                    {
+                        var idx = i;
+                        <span class="dot @(idx == tutorialPage ? "dot-active" : "")" @onclick="() => tutorialPage = idx"></span>
+                    }
+                </div>
+
+                <div class="tutorial-nav">
+                    <button class="btn btn-outline btn-sm" @onclick="PrevSlide" disabled="@(tutorialPage == 0)">Back</button>
+                    <span class="slide-counter">@(tutorialPage + 1) / @tutorialSlides.Length</span>
+                    @if (tutorialPage < tutorialSlides.Length - 1)
+                    {
+                        <button class="btn btn-primary btn-sm" @onclick="NextSlide">Next</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary btn-sm" @onclick="CloseTutorial">Got it!</button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <section class="card">
+        <h2 class="card-title">Ticker</h2>
+
+        <div class="ticker-row">
+            <div class="form-group ticker-input">
+                <label>Symbol</label>
+                <input type="text" @bind="ticker" placeholder="AAPL" />
+            </div>
+            <button class="btn btn-primary" @onclick="FetchAndPredict" disabled="@isBusy">
+                @(isBusy ? "Working..." : "Fetch and Predict")
+            </button>
+            <button class="btn btn-outline" @onclick="TrainFromSampleData" disabled="@isBusy">
+                Use Sample Data
+            </button>
+        </div>
+    </section>
+
+    @if (showStatus)
+    {
+        <section class="card">
+            <h2 class="card-title">Model</h2>
+
+            <p class="status-text">
+                <span class="status-label">Status:</span> @PredictionService.TrainingStatus
+            </p>
+
+            @if (PredictionService.IsModelTrained)
+            {
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <span class="metric-value">@PredictionService.Accuracy.ToString("P1")</span>
+                        <span class="metric-label">Accuracy</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value">@PredictionService.AUC.ToString("F3")</span>
+                        <span class="metric-label">AUC</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value">@PredictionService.F1Score.ToString("F3")</span>
+                        <span class="metric-label">F1 Score</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-value">@dataPointCount</span>
+                        <span class="metric-label">Data Points</span>
+                    </div>
+                </div>
+            }
+        </section>
+    }
+
+    @if (predictionResult is not null)
+    {
+        <section class="card">
+            <h2 class="card-title">Prediction for @activeTicker</h2>
+            <p class="card-description">Based on the most recent trading day</p>
+
+            <div class="result-card @(predictionResult.PredictedLabel ? "result-up" : "result-down")">
+                <span class="result-direction">
+                    @(predictionResult.PredictedLabel ? "UP" : "DOWN")
+                </span>
+                <span class="result-label">predicted for tomorrow</span>
+                <div class="result-details">
+                    <div class="result-stat">
+                        <span class="result-stat-value">@predictionResult.Probability.ToString("P1")</span>
+                        <span class="result-stat-label">Probability</span>
+                    </div>
+                    <div class="result-stat">
+                        <span class="result-stat-value">@predictionResult.Score.ToString("F4")</span>
+                        <span class="result-stat-label">Score</span>
+                    </div>
+                </div>
+            </div>
+
+            @if (latestInput is not null)
+            {
+                <details class="indicators-details">
+                    <summary>View indicators</summary>
+                    <div class="indicators-grid">
+                        <span><strong>Close:</strong> @latestInput.Close.ToString("F2")</span>
+                        <span><strong>Volume:</strong> @latestInput.Volume.ToString("N0")</span>
+                        <span><strong>MA5:</strong> @latestInput.MA5.ToString("F2")</span>
+                        <span><strong>MA10:</strong> @latestInput.MA10.ToString("F2")</span>
+                        <span><strong>MA50:</strong> @latestInput.MA50.ToString("F2")</span>
+                        <span><strong>RSI:</strong> @latestInput.RSI.ToString("F1")</span>
+                        <span><strong>Volatility:</strong> @latestInput.Volatility.ToString("F4")</span>
+                        <span><strong>Return:</strong> @latestInput.Return.ToString("F4")</span>
+                    </div>
+                </details>
+            }
+        </section>
+    }
+
+    @* ── Charts ── *@
+    @if (chartDataset is not null && chartDataset.Count > 0)
+    {
+        <section class="card">
+            <h2 class="card-title">Charts — @activeTicker</h2>
+            <p class="card-description">Price, moving averages, RSI, volatility, and volume</p>
+            <StockCharts Dataset="chartDataset" />
+        </section>
+    }
+
+    @if (PredictionService.IsModelTrained)
+    {
+        <section class="card">
+            <details>
+                <summary class="card-title clickable">Manual Predict</summary>
+                <p class="card-description">Override indicators and re-predict.</p>
+
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Close</label>
+                        <input type="number" step="0.01" @bind="close" />
+                    </div>
+                    <div class="form-group">
+                        <label>Volume</label>
+                        <input type="number" @bind="volume" />
+                    </div>
+                    <div class="form-group">
+                        <label>MA5</label>
+                        <input type="number" step="0.01" @bind="ma5" />
+                    </div>
+                    <div class="form-group">
+                        <label>MA10</label>
+                        <input type="number" step="0.01" @bind="ma10" />
+                    </div>
+                    <div class="form-group">
+                        <label>MA50</label>
+                        <input type="number" step="0.01" @bind="ma50" />
+                    </div>
+                    <div class="form-group">
+                        <label>RSI</label>
+                        <input type="number" step="0.01" @bind="rsi" />
+                    </div>
+                    <div class="form-group">
+                        <label>Volatility</label>
+                        <input type="number" step="0.001" @bind="volatility" />
+                    </div>
+                    <div class="form-group">
+                        <label>Daily Return</label>
+                        <input type="number" step="0.001" @bind="dailyReturn" />
+                    </div>
+                </div>
+
+                <button class="btn btn-secondary" @onclick="RunManualPrediction">
+                    Predict
+                </button>
+            </details>
+        </section>
+    }
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-banner">@errorMessage</div>
+    }
+</div>
+
+@code {
+    private string ticker = "AAPL";
+    private string activeTicker = "";
+    private int dataPointCount;
+
+    private float close, volume, ma5, ma10, ma50, rsi, volatility, dailyReturn;
+
+    private bool isBusy;
+    private bool showStatus;
+    private bool showTutorial;
+    private bool darkMode;
+    private int tutorialPage;
+    private StockPrediction? predictionResult;
+    private StockData? latestInput;
+    private List<StockData>? chartDataset;
+    private string? errorMessage;
+
+    private record TutorialSlide(string Icon, string Title, string Body);
+
+    private static readonly TutorialSlide[] tutorialSlides =
+    [
+        new("👋", "Welcome to Stock Predictor",
+            "This app uses machine learning to predict whether a stock will go UP or DOWN tomorrow. Let's walk through how it works!"),
+        new("🔤", "Enter a Ticker",
+            "Type a stock ticker symbol (like AAPL, MSFT, or TSLA) in the Symbol field. The app will fetch real historical price data from Alpha Vantage."),
+        new("📦", "Or Use Sample Data",
+            "Hit 'Use Sample Data' to skip the API call and test with bundled data. Great if you've exceeded your free API limit (25 requests/day)."),
+        new("🧠", "Model Training",
+            "The app computes technical indicators (MA5, MA10, MA50, RSI, Volatility, Return) then trains a FastTree classifier. You'll see Accuracy, AUC, and F1 Score metrics."),
+        new("📊", "Reading the Prediction",
+            "The result shows UP or DOWN with a Probability (model confidence, 50% = guessing, 90%+ = high confidence) and a raw Score."),
+        new("📈", "Charts",
+            "Scroll down to see interactive charts: Price with moving average overlays, RSI with overbought/oversold zones, Volatility, and Volume."),
+        new("🔧", "Manual Predict",
+            "Expand 'Manual Predict' at the bottom to override any indicator value and run a custom what-if prediction."),
+        new("🔑", "API Key Tip",
+            "The free Alpha Vantage 'demo' key only works for a few tickers. Get your own free key at alphavantage.co for any stock symbol — 25 requests per day.")
+    ];
+
+    private void NextSlide()
+    {
+        if (tutorialPage < tutorialSlides.Length - 1)
+            tutorialPage++;
+    }
+
+    private void PrevSlide()
+    {
+        if (tutorialPage > 0)
+            tutorialPage--;
+    }
+
+    private void CloseTutorial()
+    {
+        showTutorial = false;
+        tutorialPage = 0;
+    }
+
+    private async Task ToggleDarkMode(ChangeEventArgs e)
+    {
+        darkMode = (bool)(e.Value ?? false);
+        await JS.InvokeVoidAsync("setDarkMode", darkMode);
+    }
+
+    private async Task FetchAndPredict()
+    {
+        if (string.IsNullOrWhiteSpace(ticker))
+        {
+            errorMessage = "Please enter a ticker symbol.";
+            return;
+        }
+
+        try
+        {
+            isBusy = true;
+            showStatus = true;
+            errorMessage = null;
+            predictionResult = null;
+            latestInput = null;
+            chartDataset = null;
+            activeTicker = ticker.Trim().ToUpperInvariant();
+            StateHasChanged();
+
+            PredictionService.TrainingStatus = $"Fetching data for {activeTicker}...";
+            StateHasChanged();
+            var rawRows = await DataFetcher.FetchDailyAsync(activeTicker);
+
+            await PredictionService.TrainFromRawDataAsync(rawRows);
+            dataPointCount = rawRows.Count;
+
+            var dataset = DatasetBuilder.BuildDataset(rawRows);
+            var latest = dataset.Last();
+            latestInput = latest;
+            chartDataset = dataset;
+
+            close = latest.Close;
+            volume = latest.Volume;
+            ma5 = latest.MA5;
+            ma10 = latest.MA10;
+            ma50 = latest.MA50;
+            rsi = latest.RSI;
+            volatility = latest.Volatility;
+            dailyReturn = latest.Return;
+
+            predictionResult = PredictionService.Predict(latest);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TrainFromSampleData()
+    {
+        try
+        {
+            isBusy = true;
+            showStatus = true;
+            errorMessage = null;
+            predictionResult = null;
+            latestInput = null;
+            chartDataset = null;
+            activeTicker = "SAMPLE";
+            StateHasChanged();
+
+            PredictionService.TrainingStatus = "Loading bundled sample data...";
+            StateHasChanged();
+
+            using var stream = await FileSystem.OpenAppPackageFileAsync("stockdata.csv");
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+
+            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var rawRows = new List<RawStockRow>();
+            for (int i = 1; i < lines.Length; i++)
+            {
+                var parts = lines[i].Split(',');
+                if (parts.Length >= 2 &&
+                    float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var c) &&
+                    float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v))
+                {
+                    rawRows.Add(new RawStockRow { Close = c, Volume = v });
+                }
+            }
+
+            await PredictionService.TrainFromRawDataAsync(rawRows);
+            dataPointCount = rawRows.Count;
+
+            var dataset = DatasetBuilder.BuildDataset(rawRows);
+            var latest = dataset.Last();
+            latestInput = latest;
+            chartDataset = dataset;
+
+            close = latest.Close;
+            volume = latest.Volume;
+            ma5 = latest.MA5;
+            ma10 = latest.MA10;
+            ma50 = latest.MA50;
+            rsi = latest.RSI;
+            volatility = latest.Volatility;
+            dailyReturn = latest.Return;
+
+            predictionResult = PredictionService.Predict(latest);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Sample data failed: {ex.Message}";
+        }
+        finally
+        {
+            isBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    private void RunManualPrediction()
+    {
+        try
+        {
+            errorMessage = null;
+
+            var input = new StockData
+            {
+                Close = close,
+                Volume = volume,
+                MA5 = ma5,
+                MA10 = ma10,
+                MA50 = ma50,
+                RSI = rsi,
+                Volatility = volatility,
+                Return = dailyReturn
+            };
+
+            latestInput = input;
+            predictionResult = PredictionService.Predict(input);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Prediction failed: {ex.Message}";
+        }
+    }
+}

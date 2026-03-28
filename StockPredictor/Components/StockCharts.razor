@@ -1,0 +1,108 @@
+@using StockPredictor.Models
+@inject IJSRuntime JS
+
+@* ── Chart Info Popup ── *@
+@if (activeTip is not null && chartInfos.TryGetValue(activeTip, out var info))
+{
+    <div class="tip-overlay" @onclick="() => activeTip = null">
+        <div class="tip-modal" @onclick:stopPropagation="true">
+            <button class="tip-close" @onclick="() => activeTip = null">✕</button>
+            <div class="tip-icon">@info.Icon</div>
+            <h2 class="tip-title">@info.Title</h2>
+            <p class="tip-body">@info.Body</p>
+            <button class="btn btn-primary btn-sm tip-dismiss" @onclick="() => activeTip = null">Got it</button>
+        </div>
+    </div>
+}
+
+<div class="charts-container">
+    <div class="chart-wrapper chart-large">
+        <div class="chart-header">
+            <span class="chart-label">Price & Moving Averages</span>
+            <span class="chart-info" @onclick='() => activeTip = "price"'>i</span>
+        </div>
+        <canvas id="priceChart"></canvas>
+    </div>
+    <div class="chart-row">
+        <div class="chart-wrapper chart-half">
+            <div class="chart-header">
+                <span class="chart-label">RSI (14)</span>
+                <span class="chart-info" @onclick='() => activeTip = "rsi"'>i</span>
+            </div>
+            <canvas id="rsiChart"></canvas>
+        </div>
+        <div class="chart-wrapper chart-half">
+            <div class="chart-header">
+                <span class="chart-label">Volatility</span>
+                <span class="chart-info" @onclick='() => activeTip = "volatility"'>i</span>
+            </div>
+            <canvas id="volatilityChart"></canvas>
+        </div>
+    </div>
+    <div class="chart-wrapper chart-medium">
+        <div class="chart-header">
+            <span class="chart-label">Volume</span>
+            <span class="chart-info" @onclick='() => activeTip = "volume"'>i</span>
+        </div>
+        <canvas id="volumeChart"></canvas>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public List<StockData>? Dataset { get; set; }
+
+    private string? activeTip;
+
+    private record ChartInfo(string Icon, string Title, string Body);
+
+    private static readonly Dictionary<string, ChartInfo> chartInfos = new()
+    {
+        ["price"] = new("📈", "Price & Moving Averages",
+            "Close is the stock's daily closing price. " +
+            "MA 5, 10, and 50 are moving averages over those periods — they smooth out daily noise to reveal the underlying trend. " +
+            "When a short-term MA (like 5) crosses above a long-term MA (like 50), it often signals upward momentum (a \"golden cross\"). " +
+            "Crossing below suggests a potential downturn (a \"death cross\")."),
+        ["rsi"] = new("⚡", "RSI — Relative Strength Index",
+            "RSI measures price momentum on a 0–100 scale over 14 days. " +
+            "Above 70 means the stock is overbought — it may have risen too fast and could pull back. " +
+            "Below 30 means oversold — it may have dropped too much and could bounce. " +
+            "Around 50 is neutral. The dashed lines on the chart mark these key zones."),
+        ["volatility"] = new("🌊", "Volatility",
+            "Volatility measures how much the stock price fluctuates day to day. " +
+            "High volatility means large price swings and higher risk — but also more opportunity. " +
+            "Low volatility means calmer, more stable movement. " +
+            "Spikes often coincide with earnings reports, news events, or market-wide turbulence."),
+        ["volume"] = new("📊", "Volume",
+            "Volume is the total number of shares traded each day. " +
+            "High volume confirms strong price moves — a rally on heavy volume is more trustworthy than one on light volume. " +
+            "Sudden volume spikes often signal important events like earnings, analyst upgrades, or institutional buying/selling.")
+    };
+
+    private List<StockData>? _renderedDataset;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Dataset is null || Dataset.Count == 0)
+            return;
+
+        if (ReferenceEquals(Dataset, _renderedDataset))
+            return;
+
+        _renderedDataset = Dataset;
+
+        var labels = Enumerable.Range(1, Dataset.Count).Select(i => i.ToString()).ToArray();
+        var close = Dataset.Select(d => (double)d.Close).ToArray();
+        var ma5 = Dataset.Select(d => (double)d.MA5).ToArray();
+        var ma10 = Dataset.Select(d => (double)d.MA10).ToArray();
+        var ma50 = Dataset.Select(d => (double)d.MA50).ToArray();
+        var rsi = Dataset.Select(d => (double)d.RSI).ToArray();
+        var vol = Dataset.Select(d => (double)d.Volume).ToArray();
+        var volatility = Dataset.Select(d => (double)d.Volatility).ToArray();
+
+        await JS.InvokeVoidAsync("stockCharts.createPriceChart", "priceChart", labels, close, ma5, ma10, ma50);
+        await JS.InvokeVoidAsync("stockCharts.createRsiChart", "rsiChart", labels, rsi);
+        await JS.InvokeVoidAsync("stockCharts.createVolumeChart", "volumeChart", labels, vol);
+        await JS.InvokeVoidAsync("stockCharts.createVolatilityChart", "volatilityChart", labels, volatility);
+    }
+}
