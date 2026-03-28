@@ -20,6 +20,7 @@ namespace StockPredictor
             builder.Services.AddSingleton<StockDataFetcher>();
             builder.Services.AddSingleton<StockPredictionService>();
             builder.Services.AddSingleton<ThemeService>();
+            builder.Services.AddSingleton<SettingsService>();
             builder.Services.AddTransient<BacktestService>();
 
 #if DEBUG

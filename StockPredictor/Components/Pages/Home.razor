@@ -8,9 +8,11 @@
 
 <div class="page-container @(Theme.IsDarkMode ? "dark" : "")">
     <header class="app-header">
-        <div class="title-row">
-            <h1>Stock Predictor</h1>
-            <button class="info-btn" @onclick="() => showTutorial = true" title="How to use this app">i</button>
+        <h1>Stock Predictor</h1>
+        <p class="subtitle">ML-powered next-day direction forecast</p>
+        <nav class="header-nav">
+            <button class="nav-pill" @onclick="() => showTutorial = true" title="How to use this app">ℹ️ Help</button>
+            <a href="/settings" class="nav-pill">⚙️ Settings</a>
             <label class="theme-toggle" title="Toggle dark mode">
                 <input type="checkbox" checked="@Theme.IsDarkMode" @onchange="ToggleDarkMode" />
                 <span class="toggle-track">
@@ -18,8 +20,7 @@
                 </span>
                 <span class="toggle-icon">@(Theme.IsDarkMode ? "🌙" : "☀️")</span>
             </label>
-        </div>
-        <p class="subtitle">ML-powered next-day direction forecast</p>
+        </nav>
     </header>
 
     @* ── Tutorial Slideshow ── *@

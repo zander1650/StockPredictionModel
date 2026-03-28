@@ -3,6 +3,7 @@
 @using StockPredictor.Models
 @inject StockDataFetcher DataFetcher
 @inject BacktestService Backtester
+@inject SettingsService Settings
 @inject ThemeService Theme
 @inject IJSRuntime JS
 
@@ -23,9 +24,11 @@
     }
 
     <header class="app-header">
-        <div class="title-row">
-            <h1>Backtester</h1>
-            <a href="/" class="back-link">← Predictor</a>
+        <h1>Backtester</h1>
+        <p class="subtitle">See how the model would have performed on historical data</p>
+        <nav class="header-nav">
+            <a href="/" class="nav-pill">← Predictor</a>
+            <a href="/settings" class="nav-pill">⚙️ Settings</a>
             <label class="theme-toggle" title="Toggle dark mode">
                 <input type="checkbox" checked="@Theme.IsDarkMode" @onchange="ToggleDarkMode" />
                 <span class="toggle-track">
@@ -33,8 +36,7 @@
                 </span>
                 <span class="toggle-icon">@(Theme.IsDarkMode ? "🌙" : "☀️")</span>
             </label>
-        </div>
-        <p class="subtitle">See how the model would have performed on historical data</p>
+        </nav>
     </header>
 
     <section class="card">
@@ -202,10 +204,17 @@
 </div>
 
 @code {
-    private string ticker = "AAPL";
+    private string ticker = "";
     private string activeTicker = "";
-    private double startingCapital = 10_000;
-    private int trainPct = 70;
+    private double startingCapital;
+    private int trainPct;
+
+    protected override void OnInitialized()
+    {
+        ticker = Settings.DefaultTicker;
+        startingCapital = Settings.DefaultCapital;
+        trainPct = Settings.DefaultTrainPct;
+    }
     private bool isBusy;
     private string statusMessage = "";
     private string? errorMessage;

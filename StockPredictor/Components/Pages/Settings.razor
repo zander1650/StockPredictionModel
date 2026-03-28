@@ -1,0 +1,159 @@
+@page "/settings"
+@using StockPredictor.Services
+@inject SettingsService SettingsSvc
+@inject ThemeService Theme
+@inject IJSRuntime JS
+
+<div class="page-container @(Theme.IsDarkMode ? "dark" : "")">
+
+    <header class="app-header">
+        <h1>Settings</h1>
+        <p class="subtitle">Customize your experience and backtest defaults</p>
+        <nav class="header-nav">
+            <a href="/" class="nav-pill">← Predictor</a>
+            <a href="/backtest" class="nav-pill">📊 Backtest</a>
+        </nav>
+    </header>
+
+    @* ── Appearance ── *@
+    <section class="card">
+        <h2 class="card-title">Appearance</h2>
+        <p class="card-description">Control how the app looks.</p>
+
+        <div class="setting-row">
+            <div class="setting-label">
+                <span class="setting-icon">🌙</span>
+                <div>
+                    <strong>Dark Mode</strong>
+                    <p class="setting-hint">Switch between light and dark themes</p>
+                </div>
+            </div>
+            <label class="theme-toggle">
+                <input type="checkbox" checked="@Theme.IsDarkMode" @onchange="ToggleDarkMode" />
+                <span class="toggle-track">
+                    <span class="toggle-thumb"></span>
+                </span>
+                <span class="toggle-icon">@(Theme.IsDarkMode ? "🌙" : "☀️")</span>
+            </label>
+        </div>
+    </section>
+
+    @* ── Backtest Defaults ── *@
+    <section class="card">
+        <h2 class="card-title">Backtest Defaults</h2>
+        <p class="card-description">These values pre-fill the backtest setup form.</p>
+
+        <div class="setup-row">
+            <div class="form-group">
+                <label>Default Ticker</label>
+                <input type="text" @bind="defaultTicker" placeholder="AAPL" class="ticker-field" />
+            </div>
+            <div class="form-group">
+                <label>Default Starting Capital ($)</label>
+                <input type="number" @bind="defaultCapital" step="1000" min="1" />
+            </div>
+            <div class="form-group">
+                <label>Default Train %</label>
+                <input type="number" @bind="defaultTrainPct" min="50" max="90" step="5" />
+            </div>
+        </div>
+    </section>
+
+    @* ── Trading Model ── *@
+    <section class="card">
+        <h2 class="card-title">Trading Model</h2>
+        <p class="card-description">Fine-tune how the model places trades.</p>
+
+        <div class="setting-row">
+            <div class="setting-label">
+                <span class="setting-icon">📊</span>
+                <div>
+                    <strong>Confidence Threshold</strong>
+                    <p class="setting-hint">Minimum probability to take a trade (0.50 – 0.95)</p>
+                </div>
+            </div>
+            <input type="number" @bind="confidenceThreshold" min="0.50" max="0.95" step="0.05"
+                   class="setting-input-sm" />
+        </div>
+
+        <div class="setting-row">
+            <div class="setting-label">
+                <span class="setting-icon">📉</span>
+                <div>
+                    <strong>Allow Short Selling</strong>
+                    <p class="setting-hint">Let the model take short positions on predicted drops</p>
+                </div>
+            </div>
+            <label class="theme-toggle">
+                <input type="checkbox" checked="@allowShorts"
+                       @onchange="e => allowShorts = (bool)(e.Value ?? true)" />
+                <span class="toggle-track">
+                    <span class="toggle-thumb"></span>
+                </span>
+            </label>
+        </div>
+    </section>
+
+    @* ── Actions ── *@
+    <section class="card">
+        <div class="btn-row">
+            <button class="btn btn-primary" @onclick="Save">Save Settings</button>
+            <button class="btn btn-outline" @onclick="ResetDefaults">Reset to Defaults</button>
+        </div>
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <p class="status-text save-status">@statusMessage</p>
+        }
+    </section>
+</div>
+
+@code {
+    private string defaultTicker = "AAPL";
+    private double defaultCapital = 10_000;
+    private int defaultTrainPct = 70;
+    private double confidenceThreshold = 0.5;
+    private bool allowShorts = true;
+    private string? statusMessage;
+
+    protected override void OnInitialized()
+    {
+        defaultTicker = SettingsSvc.DefaultTicker;
+        defaultCapital = SettingsSvc.DefaultCapital;
+        defaultTrainPct = SettingsSvc.DefaultTrainPct;
+        confidenceThreshold = SettingsSvc.ConfidenceThreshold;
+        allowShorts = SettingsSvc.AllowShorts;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("setDarkMode", Theme.IsDarkMode);
+    }
+
+    private async Task ToggleDarkMode(ChangeEventArgs e)
+    {
+        Theme.IsDarkMode = (bool)(e.Value ?? false);
+        await JS.InvokeVoidAsync("setDarkMode", Theme.IsDarkMode);
+    }
+
+    private void Save()
+    {
+        SettingsSvc.DefaultTicker = defaultTicker?.Trim().ToUpperInvariant() ?? "AAPL";
+        SettingsSvc.DefaultCapital = defaultCapital is > 0 and <= 100_000_000 ? defaultCapital : 10_000;
+        SettingsSvc.DefaultTrainPct = defaultTrainPct is >= 50 and <= 90 ? defaultTrainPct : 70;
+        SettingsSvc.ConfidenceThreshold = confidenceThreshold is >= 0.5 and <= 0.95 ? confidenceThreshold : 0.5;
+        SettingsSvc.AllowShorts = allowShorts;
+        statusMessage = "✅ Settings saved!";
+    }
+
+    private void ResetDefaults()
+    {
+        SettingsSvc.ResetAll();
+        defaultTicker = "AAPL";
+        defaultCapital = 10_000;
+        defaultTrainPct = 70;
+        confidenceThreshold = 0.5;
+        allowShorts = true;
+        statusMessage = "🔄 Reset to defaults.";
+    }
+}
